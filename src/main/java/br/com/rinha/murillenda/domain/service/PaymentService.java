@@ -1,5 +1,6 @@
 package br.com.rinha.murillenda.domain.service;
 
+import br.com.rinha.murillenda.api.dto.output.PaymentSummaryResponse;
 import br.com.rinha.murillenda.domain.dto.external.input.PaymentRequest;
 import br.com.rinha.murillenda.domain.external.PaymentProcessorClient;
 import br.com.rinha.murillenda.domain.model.Payment;
@@ -64,6 +65,15 @@ public class PaymentService {
         } else {
             return new PaymentResult(false, "Ambos os processadores de pagamento estão indisponíveis.");
         }
+    }
+
+    public PaymentSummaryResponse getSummary() {
+        long count = paymentRepository.count();
+        BigDecimal total = paymentRepository.getEntityManager()
+                .createQuery("SELECT SUM(p.amount) FROM Payment p", BigDecimal.class)
+                .getSingleResult();
+
+        return new PaymentSummaryResponse(count, total == null ? BigDecimal.ZERO : total);
     }
 
     private boolean tryFallback(PaymentRequest request) {
