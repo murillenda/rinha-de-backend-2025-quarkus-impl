@@ -6,56 +6,41 @@ import br.com.rinha.murillenda.domain.model.Payment;
 import br.com.rinha.murillenda.domain.repository.PaymentRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.inject.Named;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.eclipse.microprofile.rest.client.RestClientBuilder;
 
 import java.math.BigDecimal;
-import java.net.URI;
 import java.time.Instant;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @ApplicationScoped
 public class PaymentService {
 
-    private final PaymentProcessorClient defaultClient;
-    private final PaymentProcessorClient fallbackClient;
-
-    private final ProcessorHealthService healthService;
-    private final PaymentRepository paymentRepository;
+    @Inject
+    @Named("defaultClient")
+    PaymentProcessorClient defaultClient;
 
     @Inject
-    public PaymentService(
-            ProcessorHealthService healthService,
-            PaymentRepository paymentRepository,
-            @ConfigProperty(name = "processor.default.url") String defaultUrl,
-            @ConfigProperty(name = "processor.fallback.url") String fallbackUrl) {
+    @Named("fallbackClient")
+    PaymentProcessorClient fallbackClient;
 
-        this.healthService = healthService;
-        this.paymentRepository = paymentRepository;
+    @Inject
+    ProcessorHealthService healthService;
 
-        this.defaultClient = RestClientBuilder.newBuilder()
-                .baseUri(URI.create(defaultUrl))
-                .connectTimeout(500, TimeUnit.MILLISECONDS)
-                .readTimeout(1500, TimeUnit.MILLISECONDS)
-                .build(PaymentProcessorClient.class);
+    @Inject
+    PaymentRepository paymentRepository;
 
-        this.fallbackClient = RestClientBuilder.newBuilder()
-                .baseUri(URI.create(fallbackUrl))
-                .connectTimeout(500, TimeUnit.MILLISECONDS)
-                .readTimeout(1500, TimeUnit.MILLISECONDS)
-                .build(PaymentProcessorClient.class);
-    }
+    public PaymentService() {}
 
     /**
      * Orquestra o processamento de um novo pagamento.
      */
     @Transactional
     public PaymentResult processNewPayment(BigDecimal amount) {
-        var request = new PaymentRequest(amount);
+        UUID paymentId = UUID.randomUUID();
+        var request = new PaymentRequest(paymentId, amount);
         boolean processedSuccessfully = false;
 
         if (healthService.isDefaultHealthy()) {
@@ -73,7 +58,7 @@ public class PaymentService {
         }
 
         if (processedSuccessfully) {
-            persistPayment(amount);
+            persistPayment(paymentId, amount);
             return new PaymentResult(true, "Pagamento processado com sucesso!");
         } else {
             return new PaymentResult(false, "Ambos os processadores de pagamento estão indisponíveis.");
@@ -95,9 +80,9 @@ public class PaymentService {
         return false;
     }
 
-    private void persistPayment(BigDecimal amount) {
+    private void persistPayment(UUID correlationId, BigDecimal amount) {
         Payment p = new Payment();
-        p.correlationId = UUID.randomUUID();
+        p.correlationId = correlationId;
         p.amount = amount;
         p.requested_at = Instant.now();
         paymentRepository.persist(p);
