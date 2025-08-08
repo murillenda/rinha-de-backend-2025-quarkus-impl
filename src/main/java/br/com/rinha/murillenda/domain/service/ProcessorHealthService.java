@@ -2,6 +2,7 @@ package br.com.rinha.murillenda.domain.service;
 
 import br.com.rinha.murillenda.domain.external.PaymentProcessorClient;
 import br.com.rinha.murillenda.domain.model.ProcessorStatus;
+import io.quarkus.cache.CacheResult;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -85,7 +86,8 @@ public class ProcessorHealthService {
         return isProcessorHealthy(FALLBACK);
     }
 
-    private boolean isProcessorHealthy(String processorName) {
+    @CacheResult(cacheName = "health-status-cache")
+    public boolean isProcessorHealthy(String processorName) {
         ProcessorStatus status = ProcessorStatus.findById(processorName);
 
         if (status == null) {

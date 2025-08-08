@@ -2,10 +2,7 @@ package br.com.rinha.murillenda.api;
 
 import br.com.rinha.murillenda.domain.service.PaymentService;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
+import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +35,7 @@ public class PaymentsResource {
 
     @GET
     @Path("/payments-summary")
+    @Produces(MediaType.APPLICATION_JSON)
     public Response getPaymentsSummary() {
         var summary = paymentService.getSummary();
         return Response.ok(summary).build();
