@@ -9,6 +9,7 @@ import jakarta.inject.Inject;
 import jakarta.inject.Named;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
+import org.eclipse.microprofile.faulttolerance.Retry;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -46,7 +47,7 @@ public class PaymentService {
         if (healthService.isDefaultHealthy()) {
             log.info("SERVICE LOGIC: Tentando processador DEFAULT.");
             try {
-                defaultClient.processPayment(request);
+                attemptPayment(defaultClient, request);
                 processedSuccessfully = true;
             } catch (Exception e) {
                 log.error("SERVICE LOGIC: Falha no DEFAULT. Tentando fallback...");
@@ -68,7 +69,7 @@ public class PaymentService {
     private boolean tryFallback(PaymentRequest request) {
         if (healthService.isFallbackHealthy()) {
             try {
-                fallbackClient.processPayment(request);
+                attemptPayment(fallbackClient, request);
                 log.info("SERVICE LOGIC: Sucesso no FALLBACK.");
                 return true;
             } catch (Exception e) {
@@ -78,6 +79,13 @@ public class PaymentService {
         }
         log.error("SERVICE LOGIC: Fallback não está saudável para ser tentado.");
         return false;
+    }
+
+    // --- RETRY ---
+    @Retry(maxRetries = 3, delay = 50, jitter = 20, retryOn = Exception.class)
+    public void attemptPayment(PaymentProcessorClient client, PaymentRequest request) {
+        log.info("Attempting payment for {}", request.correlationId());
+        client.processPayment(request);
     }
 
     private void persistPayment(UUID correlationId, BigDecimal amount) {
