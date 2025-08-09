@@ -20,8 +20,8 @@ public class RestClientConfig {
             @ConfigProperty(name = "processor.default.url") String url) {
         return RestClientBuilder.newBuilder()
                 .baseUri(URI.create(url))
-                .connectTimeout(500, TimeUnit.MILLISECONDS)
-                .readTimeout(1500, TimeUnit.MILLISECONDS)
+                .connectTimeout(250, TimeUnit.MILLISECONDS)
+                .readTimeout(800, TimeUnit.MILLISECONDS)
                 .build(PaymentProcessorClient.class);
     }
 
@@ -32,8 +32,8 @@ public class RestClientConfig {
             @ConfigProperty(name = "processor.fallback.url") String url) {
         return RestClientBuilder.newBuilder()
                 .baseUri(URI.create(url))
-                .connectTimeout(500, TimeUnit.MILLISECONDS)
-                .readTimeout(1500, TimeUnit.MILLISECONDS)
+                .connectTimeout(250, TimeUnit.MILLISECONDS)
+                .readTimeout(800, TimeUnit.MILLISECONDS)
                 .build(PaymentProcessorClient.class);
     }
 
