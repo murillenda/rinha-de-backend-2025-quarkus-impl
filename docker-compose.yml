@@ -10,11 +10,17 @@ services:
       - POSTGRES_USER=rinha
       - POSTGRES_PASSWORD=rinha
       - POSTGRES_DB=rinha
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U rinha -d rinha" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    # ----------------------------------------
     deploy:
       resources:
         limits:
-          cpus: "0.15"
-          memory: "50MB"
+          cpus: "0.20"
+          memory: "80MB"
     networks:
       - rinha-net
 
@@ -22,12 +28,13 @@ services:
     build: .
     hostname: api01
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: "120MB"
+          cpus: "0.60"
+          memory: "135MB"
     networks:
       - rinha-net
       - payment-processor

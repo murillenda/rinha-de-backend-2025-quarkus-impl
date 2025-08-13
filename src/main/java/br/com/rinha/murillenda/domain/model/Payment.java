@@ -7,5 +7,7 @@ import java.util.UUID;
 public record Payment(
         UUID correlationId,
         BigDecimal amount,
-        Instant requested_at
+        Instant requested_at,
+        String status,
+        String processor
 ) {}

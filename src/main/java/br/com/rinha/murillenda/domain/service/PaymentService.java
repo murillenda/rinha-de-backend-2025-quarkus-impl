@@ -1,6 +1,8 @@
 package br.com.rinha.murillenda.domain.service;
 
 import br.com.rinha.murillenda.api.dto.output.PaymentSummaryResponse;
+import br.com.rinha.murillenda.api.dto.output.SummaryResponse;
+import br.com.rinha.murillenda.domain.model.ProcessingResult;
 import br.com.rinha.murillenda.domain.dto.external.input.PaymentRequest;
 import br.com.rinha.murillenda.domain.external.PaymentProcessorClient;
 import br.com.rinha.murillenda.domain.model.Payment;
@@ -11,10 +13,8 @@ import jakarta.inject.Inject;
 import jakarta.inject.Named;
 import lombok.extern.slf4j.Slf4j;
 
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.UUID;
 
 @Slf4j
 @ApplicationScoped
@@ -34,58 +34,39 @@ public class PaymentService {
     @Inject
     PaymentRepository paymentRepository;
 
-    public Uni<PaymentResult> processNewPayment(BigDecimal amount) {
-        UUID paymentId = UUID.randomUUID();
-        var request = new PaymentRequest(paymentId, amount);
+    public Uni<ProcessingResult> processQueuedPayment(Payment paymentJob) {
+        var request = new PaymentRequest(paymentJob.correlationId(), paymentJob.amount());
 
-        return healthService.isDefaultHealthy()
+        // Tenta o fluxo do 'default'
+        Uni<ProcessingResult> defaultFlow = healthService.isDefaultHealthy()
                 .flatMap(isHealthy -> {
-                    if (isHealthy) {
-                        log.info("SERVICE LOGIC: Default saudável, tentando pagamento...");
-                        // --- LÓGICA DE RETRY REATIVO --- //
-                        return defaultClient.processPayment(request)
-                                .onFailure().retry().withBackOff(Duration.ofMillis(50), Duration.ofMillis(100)).atMost(3)
-                                .map(v -> true); // Se sucesso, o resultado é 'true'
+                    if (!isHealthy) {
+                        return Uni.createFrom().failure(new IllegalStateException("Default processor not healthy"));
                     }
-                    // Se não está saudável, consideramos uma falha para acionar o fallback
-                    return Uni.createFrom().failure(new IllegalStateException("Default processor not healthy"));
-                })
-                .onFailure().recoverWithUni(failure -> {
-                    // Se a tentativa no default falhou (após os retries), tenta o fallback
-                    log.warn("SERVICE LOGIC: Falha no DEFAULT, tentando fallback... Causa: {}", failure.getMessage());
-                    return tryFallback(request);
-                })
-                .flatMap(processedSuccessfully -> {
-                    if (processedSuccessfully) {
-                        return paymentRepository.save(new Payment(paymentId, amount, Instant.now()))
-                                .map(v -> new PaymentResult(true, "Pagamento processado com sucesso!"));
-                    }
-                    return Uni.createFrom().item(new PaymentResult(false, "Ambos os processadores de pagamento estão indisponíveis."));
+                    return defaultClient.processPayment(request)
+                            .onFailure().retry().withBackOff(Duration.ofMillis(50), Duration.ofMillis(100)).atMost(3)
+                            .map(v -> new ProcessingResult(true, "default")); // <-- Retorna sucesso com o nome do processador
                 });
-    }
 
-    private Uni<Boolean> tryFallback(PaymentRequest request) {
-        return healthService.isFallbackHealthy()
-                .flatMap(isHealthy -> {
-                    if (isHealthy) {
-                        log.info("SERVICE LOGIC: Fallback saudável, tentando pagamento...");
-                        // --- LÓGICA DE RETRY REATIVO --- //
-                        return fallbackClient.processPayment(request)
-                                .onFailure().retry().withBackOff(Duration.ofMillis(50)).atMost(3)
-                                .map(v -> true);
-                    }
-                    log.warn("SERVICE LOGIC: Fallback não está saudável para ser tentado.");
-                    return Uni.createFrom().item(false);
+        // O fallback agora retorna o resultado com seu nome
+        return defaultFlow.onFailure().recoverWithUni(() -> {
+                    log.warn("SERVICE LOGIC: Falha no fluxo DEFAULT, tentando fallback...");
+                    return healthService.isFallbackHealthy()
+                            .flatMap(isHealthy -> {
+                                if (!isHealthy) {
+                                    return Uni.createFrom().failure(new IllegalStateException("Fallback processor not healthy"));
+                                }
+                                return fallbackClient.processPayment(request)
+                                        .onFailure().retry().withBackOff(Duration.ofMillis(50)).atMost(3)
+                                        .map(v -> new ProcessingResult(true, "fallback")); // <-- Retorna sucesso com o nome do processador
+                            });
                 })
-                .onFailure().recoverWithItem(failure -> {
-                    log.error("SERVICE LOGIC: Fallback também falhou após retries!", failure);
-                    return false;
-                });
+                // Se ambos falharem, o resultado final é 'falha' sem nome de processador
+                .onFailure().recoverWithItem(new ProcessingResult(false, null));
     }
 
-    public Uni<PaymentSummaryResponse> getSummary() {
-        return paymentRepository.getSummary();
+    // O método de resumo continua igual
+    public Uni<SummaryResponse> getSummary(Instant from, Instant to) {
+        return paymentRepository.getSummary(from, to);
     }
-
-    public record PaymentResult(boolean success, String message) {}
 }

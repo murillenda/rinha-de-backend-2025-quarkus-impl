@@ -34,7 +34,11 @@ public class ProcessorStatusRepository {
                                 "VALUES ($1, $2, $3) " +
                                 "ON CONFLICT (processorName) DO UPDATE " +
                                 "SET isHealthy = $2, lastChecked = $3")
-                        .execute(Tuple.of(status.processorName(), status.isHealthy(), LocalDateTime.ofInstant(status.lastChecked(), java.time.ZoneOffset.UTC)))
+                        .execute(Tuple.of(
+                                status.processorName(),
+                                status.isHealthy(),
+                                LocalDateTime.ofInstant(status.lastChecked(), java.time.ZoneOffset.UTC)
+                        ))
         ).replaceWithVoid();
     }
 

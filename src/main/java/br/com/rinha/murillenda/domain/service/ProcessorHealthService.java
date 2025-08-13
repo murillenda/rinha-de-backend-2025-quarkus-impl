@@ -36,7 +36,7 @@ public class ProcessorHealthService {
     @ConfigProperty(name = "healthcheck.scheduler.enabled", defaultValue = "true")
     boolean schedulerEnabled;
 
-    @Scheduled(cron = "*/5 * * * * ?")
+    @Scheduled(cron = "*/7 * * * * ?")
     void checkProcessorsHealth() {
         if (!schedulerEnabled) {
             return;
